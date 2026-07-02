@@ -21,3 +21,6 @@ saved_models_calce/
 # OS generated files
 .DS_Store
 Thumbs.db
+# Ignore specific files and folders
+paper/figures/
+repo_scan.py
