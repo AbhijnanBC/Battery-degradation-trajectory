@@ -1,0 +1,5 @@
+Failed: baseline_seed_10 | Error: Command 'python train_calce_wgan.py --exp_name baseline_seed_10 --loss_type none --lambda_physics 0.0 --seed 10' returned non-zero exit status 1.
+Failed: baseline_seed_20 | Error: Command 'python train_calce_wgan.py --exp_name baseline_seed_20 --loss_type none --lambda_physics 0.0 --seed 20' returned non-zero exit status 1.
+Failed: baseline_seed_30 | Error: Command 'python train_calce_wgan.py --exp_name baseline_seed_30 --loss_type none --lambda_physics 0.0 --seed 30' returned non-zero exit status 1.
+Failed: baseline_seed_40 | Error: Command 'python train_calce_wgan.py --exp_name baseline_seed_40 --loss_type none --lambda_physics 0.0 --seed 40' returned non-zero exit status 1.
+Failed: baseline_seed_50 | Error: Command 'python train_calce_wgan.py --exp_name baseline_seed_50 --loss_type none --lambda_physics 0.0 --seed 50' returned non-zero exit status 1.

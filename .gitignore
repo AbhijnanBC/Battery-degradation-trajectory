@@ -1,0 +1,23 @@
+# Python caches
+__pycache__/
+*.pyc
+
+# Virtual environments (if any)
+venv/
+env/
+
+# Datasets (Raw and Processed)
+data/raw/
+data/processed/
+*.mat
+*.xlsx
+*.pt
+
+# Model Weights
+saved_models/
+saved_models_calce/
+*.pth
+
+# OS generated files
+.DS_Store
+Thumbs.db
