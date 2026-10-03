@@ -1,329 +1,149 @@
 # Physics-Inspired Phenomenological Constraints for Adversarial Battery Degradation Trajectory Synthesis
 
-<p align="center">
-
 ![Python](https://img.shields.io/badge/Python-3.10+-blue)
 ![PyTorch](https://img.shields.io/badge/PyTorch-Deep%20Learning-red)
 ![GAN](https://img.shields.io/badge/Model-WGAN--GP-green)
-![Research](https://img.shields.io/badge/Research-Battery%20Digital%20Twin-orange)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey)
-
-</p>
 
 ---
 
 ## Overview
 
-This repository contains the implementation of a **Physics-Inspired Phenomenological WGAN-GP** framework for generating physically plausible lithium-ion battery degradation trajectories.
+This repository contains the code for a **physics-inspired, phenomenological WGAN-GP** that generates lithium-ion battery capacity-degradation trajectories. Lightweight inequality penalties that encode observable degradation behaviour are added to the generator objective of a 1D-CNN WGAN-GP. They do not model electrochemistry.
 
-Unlike conventional Generative Adversarial Networks that optimize only statistical similarity, this work introduces lightweight **phenomenological inequality constraints** into the adversarial optimization objective to encourage physically meaningful degradation behaviour.
-
-The project was developed as part of undergraduate research in **AI for Reliability Engineering**, with a focus on synthetic battery degradation data generation for Digital Twins and predictive maintenance.
+The project was developed as undergraduate research in AI for reliability engineering, with a focus on synthetic degradation data for digital twins and predictive maintenance.
 
 ---
 
-## Motivation
+## Method
 
-High-quality battery degradation datasets are extremely scarce.
+The generator and critic are 1D CNNs trained with the Wasserstein loss and a gradient penalty (computed on random interpolates between real and generated windows).
 
-Obtaining complete run-to-failure trajectories requires:
+The proposed generator objective is
 
-- months or years of battery cycling
-- expensive laboratory experiments
-- specialized hardware
+```
+L_G = L_adv + lambda_phys * L_physics          (lambda_phys = 50)
+L_physics = L_mono + L_rate + L_bound
+```
 
-This data scarcity limits the development of
+with each term a squared-hinge penalty averaged over generated windows and time steps (see `src/physics_loss.py`, `calculate_all_physics_loss`):
 
-- Battery Digital Twins
-- Remaining Useful Life (RUL) prediction
-- State-of-Health estimation
-- AI-driven predictive maintenance
+| Term | Penalizes |
+|---|---|
+| `L_mono` | positive capacity increments, `max(0, C_t - C_{t-1})^2` |
+| `L_rate` | capacity drops larger than 0.1 per cycle (normalized units), `max(0, C_{t-1} - C_t - 0.1)^2` |
+| `L_bound` | values outside the normalized range [-1, 1] |
 
-Generative models can alleviate this problem, but unconstrained GANs frequently generate
+Four configurations share the same architecture, optimizer and hyperparameters:
 
-- unrealistic capacity regeneration
-- excessive oscillations
-- physically impossible degradation behaviour
+| `--loss_type` | Generator penalty |
+|---|---|
+| `none` | none (baseline WGAN-GP) |
+| `tv` | total variation only, `mean(abs(C_t - C_{t-1}))` |
+| `monotonicity` | `L_mono` only |
+| `all` | `L_physics` (the proposed model, called "All Priors" in the tables) |
 
-This repository explores whether lightweight phenomenological constraints can improve synthetic battery trajectory realism without requiring computationally expensive electrochemical simulations.
-
----
-
-# Proposed Framework
-
-The proposed generator combines:
-
-- Wasserstein GAN with Gradient Penalty (WGAN-GP)
-- 1D CNN Generator
-- 1D CNN Critic
-
-augmented with three phenomenological constraints:
-
-- Monotonicity Loss
-- Total Variation Loss
-- Capacity Bound Loss
-
-These constraints are incorporated into the Generator objective:
-
-\[
-L_G = L_{adv} + \lambda_{phys}L_{physics}
-\]
-
-where
-
-\[
-L_{physics}
-=
-L_{mono}
-+
-L_{TV}
-+
-L_{bound}
-\]
-
-The objective is to generate trajectories that remain statistically realistic while respecting observable battery degradation behaviour.
+Total variation is therefore a **separate baseline** and is not part of the proposed loss.
 
 ---
 
-# Features
-
-- Physics-inspired WGAN-GP
-- Phenomenological inequality constraints
-- CNN-based generator
-- Architecture comparison (CNN vs LSTM)
-- Multi-seed evaluation pipeline
-- NASA + CALCE benchmark support
-- Derivative-distribution analysis
-- PCA manifold visualization
-- Downstream forecasting evaluation
-- Fully reproducible experiments
-
----
-
-# Repository Structure
+## Repository Structure
 
 ```text
 Battery-degradation-trajectory/
-
-├── baselines/
-│   ├── baseline_wgan/
-│   ├── monotonicity/
-│   ├── total_variation/
-│   └── proposed/
-│
-├── initial_results/
-│
 ├── notebooks/
-│
-├── phase_2/
-│
+│   ├── 01_data_extraction.ipynb      # NASA B0005/B0006/B0007/B0018 -> 50-cycle windows
+│   ├── 02_calce_extraction.ipynb     # CALCE CS2_35..CS2_38 -> 50-cycle windows, 80/20 split
+│   └── requirements.txt
 ├── src/
-│   ├── datasets/
-│   ├── models/
-│   ├── losses/
-│   ├── training/
-│   ├── evaluation/
-│   └── utils/
-│
-├── evaluate_master_tables.py
+│   ├── models.py                     # CNN generator and critic
+│   ├── models_lstm.py
+│   └── physics_loss.py               # TV, monotonicity and combined losses
+├── baselines/
+│   ├── models_lstm.py
+│   └── train_lstm.py                 # LSTM-generator comparison
+├── initial_results/                  # NASA training/evaluation scripts
+│   ├── prepare_split.py
+│   ├── train_wgan.py
+│   ├── run_all.py                    # 4 configurations x 5 seeds
+│   └── ...
+├── phase_2/                          # CALCE and downstream/analysis scripts
+│   ├── train_calce_wgan.py
+│   ├── run_calce_all.py
+│   ├── evaluate_downstream_rul.py
+│   ├── evaluate_augmentation_ratio.py
+│   ├── evaluate_lstm_comparison.py
+│   ├── evaluate_manifold.py / evaluate_manifold_pca.py
+│   └── evaluate_mmd.py
+├── evaluate_master_tables.py         # five-seed tables for both datasets
 ├── evaluate_final_tables.py
-│
 └── README.md
 ```
 
 ---
 
-# Datasets
+## Datasets
 
-Experiments were performed using two public benchmark datasets.
+Raw data are **not** included; download them and place them under `data/raw/` (NASA `.mat` files) and `data/raw/calce/<cell>/` (CALCE `.xlsx` files).
 
-### NASA Randomized Battery Usage Dataset
-
-- Run-to-failure lithium-ion degradation
-- Four batteries
-- Capacity measurements over charge/discharge cycles
+- **NASA Ames battery aging data** (Saha and Goebel, 2007): cells B0005, B0006, B0007 and B0018, discharge capacity per cycle.
+- **CALCE CS2 cells**: CS2_35 to CS2_38, per-cycle discharge capacity (3-point rolling median, cycles outside 0.3-1.3 Ah discarded).
 
 ---
 
-### CALCE Battery Dataset
+## Preprocessing and data split (as implemented)
 
-- CS2 battery series
-- Longer degradation trajectories
-- Used for cross-dataset validation
+1. Within each battery, discharge capacities are cut into 50-cycle windows with stride 1.
+2. Capacities are Min-Max normalized to [-1, 1]: NASA jointly over all four batteries, CALCE per battery.
+3. All windows are shuffled with a fixed seed (42) and split 80/20 into training and test windows.
 
----
+Adjacent windows overlap by 49 of 50 cycles, so the test set measures **window-level** generalization, not generalization to unseen batteries. Normalization is computed before the split.
 
-# Experimental Pipeline
-
-The complete workflow is
-
-```text
-Battery Dataset
-        │
-        ▼
-Sliding Window Generation
-        │
-        ▼
-Normalization
-        │
-        ▼
-WGAN-GP Training
-        │
-        ▼
-Phenomenological Constraints
-        │
-        ▼
-Synthetic Trajectories
-        │
-        ▼
-Evaluation
-```
-
-Evaluation consists of
-
-- DTW
-- MMD
-- Derivative Wasserstein Distance
-- Violation Area
-- PCA
-- CDF
-- Downstream Forecasting
+| Dataset | Batteries | Cycles | Windows | Train | Test |
+|---|---|---|---|---|---|
+| NASA | 4 | (not printed by the notebook) | 440 | 352 | 88 |
+| CALCE | 4 | 3,876 | 3,680 | 2,944 | 736 |
 
 ---
 
-# Results
+## Experiments
 
-The proposed phenomenological constraints consistently
-
-- reduce non-physical degradation behaviour
-- improve derivative realism
-- preserve latent manifold geometry
-- stabilize adversarial training
-
-An interesting observation from this work is what we refer to in the accompanying paper as the **Generative Augmentation Paradox**:
-
-> Improved marginal generative realism does not necessarily imply improved downstream predictive performance.
-
-This suggests that physically realistic synthetic trajectories do not automatically preserve the conditional dynamics required for forecasting tasks.
+- Main comparison: 4 configurations x 5 seeds (10, 20, 30, 40, 50) on each dataset; 3,000 epochs, batch size 32, Adam (lr 1e-4, betas 0.0/0.9), 5 critic steps, gradient-penalty weight 10.
+- `evaluate_master_tables.py` computes DTW (100 random real/synthetic pairs), derivative Wasserstein distance, Violation Area (mean sum of positive increments x 1000) and a linear-kernel MMD, using **1,000 synthetic windows per generator**.
+- Architecture comparison (`phase_2/evaluate_lstm_comparison.py`), derivative/CDF and PCA figures, and the downstream experiments use **2,000 synthetic windows** and the **seed-10** generators. The CNN/LSTM comparison is on NASA.
+- Downstream forecasting (`phase_2/evaluate_downstream_rul.py`, `phase_2/evaluate_augmentation_ratio.py`) is on **CALCE**: a 49-64-32-1 MLP maps 49 cycles to the next cycle, trained for 200 epochs on 250 real windows plus synthetic windows, evaluated on real test windows. Each condition is a single run.
 
 ---
 
-# Installation
+## Findings
 
-Clone the repository
+Relative to the unconstrained baseline, the proposed constraints reduce violations of the prescribed degradation constraints and improve agreement with real derivative distributions on both datasets. Total-variation regularization attains good global similarity scores (DTW, and MMD on NASA) while suppressing local degradation dynamics. Downstream, adding the proposed synthetic windows did not lower forecasting RMSE in these single-run experiments; the accompanying paper discusses this as a limitation and calls the observation the *Generative Augmentation Paradox* in the context of these experiments.
+
+---
+
+## Installation
 
 ```bash
 git clone https://github.com/AbhijnanBC/Battery-degradation-trajectory.git
-
 cd Battery-degradation-trajectory
-```
-
-Create a virtual environment
-
-```bash
 python -m venv venv
-```
-
-Activate
-
-Windows
-
-```bash
-venv\Scripts\activate
-```
-
-Linux
-
-```bash
-source venv/bin/activate
-```
-
-Install dependencies
-
-```bash
-pip install -r requirements.txt
+venv\Scripts\activate        # Windows
+pip install -r notebooks/requirements.txt
 ```
 
 ---
 
-# Running Experiments
+## Research Paper
 
-Train the baseline model
-
-```bash
-python train_baseline.py
-```
-
-Train the proposed model
-
-```bash
-python train_physics.py
-```
-
-Evaluate
-
-```bash
-python evaluate_master_tables.py
-```
-
-Generate publication tables
-
-```bash
-python evaluate_final_tables.py
-```
+This repository accompanies the manuscript **Physics-Inspired Phenomenological WGAN for Battery Degradation Trajectory Synthesis**.
 
 ---
 
-# Technologies
-
-- Python
-- PyTorch
-- NumPy
-- Pandas
-- SciPy
-- Matplotlib
-
----
-
-# Research Paper
-
-This repository accompanies the research paper
-
-> **Physics-Inspired Phenomenological Constraints for Adversarial Battery Degradation Trajectory Synthesis**
-
-The manuscript includes
-
-- methodology
-- experiments
-- benchmark evaluation
-- qualitative analysis
-- discussion
-- limitations
-- future work
-
----
-
-# Future Work
-
-Potential directions include
-
-- Diffusion-based battery generators
-- Transformer architectures
-- Full trajectory generation
-- Adaptive constraint weighting
-- Multi-chemistry datasets
-- Physics-informed diffusion models
-- Sequence-aware downstream predictors
-
----
-
-# Citation
-
-If you use this work in your research, please cite:
+## Citation
 
 ```bibtex
 @article{Abhijnan2026,
-  title={Physics-Inspired Phenomenological Constraints for Adversarial Battery Degradation Trajectory Synthesis},
+  title={Physics-Inspired Phenomenological WGAN for Battery Degradation Trajectory Synthesis},
   author={Abhijnan B C},
   year={2026}
 }
@@ -331,30 +151,17 @@ If you use this work in your research, please cite:
 
 ---
 
-# Author
+## Author
 
-**Abhijnan B C**
+**Abhijnan B C**, Department of Computer Science and Engineering, PES University, Bengaluru, India.
+GitHub: https://github.com/AbhijnanBC
 
-Department of Computer Science and Engineering
+## License
 
-PES University
-
-Bengaluru, India
-
-GitHub
-
-https://github.com/AbhijnanBC
-
----
-
-# License
-
-This project is released under the MIT License.
-
----
+Released under the MIT License.
 
 ## Acknowledgements
 
 - NASA Ames Prognostics Center
 - CALCE Battery Research Group
-- PyTorch Community
+- PyTorch community
